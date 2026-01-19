@@ -1,0 +1,51 @@
+name: WeatherDeviceProfile
+manufacturer: "Pro"
+model: "KaggleWeather"
+labels:
+  - "weather"
+description: "Weather sensor profile based on Kaggle global weather dataset"
+
+deviceResources:
+  - name: temperature
+    description: "Temperature in Celsius"
+    properties:
+      valueType: Float32
+      readWrite: RW
+
+  - name: humidity
+    description: "Relative humidity percent"
+    properties:
+      valueType: Float32
+      readWrite: RW
+
+  - name: pressure
+    description: "Pressure hPa"
+    properties:
+      valueType: Float32
+      readWrite: RW
+
+  - name: wind_speed
+    description: "Wind speed m/s"
+    properties:
+      valueType: Float32
+      readWrite: RW
+
+  - name: cooling_on
+    description: "Cooling switch (Bool)"
+    properties:
+      valueType: Bool
+      readWrite: RW
+
+deviceCommands:
+  - name: WeatherReadings
+    readWrite: R
+    resourceOperations:
+      - deviceResource: temperature
+      - deviceResource: humidity
+      - deviceResource: pressure
+      - deviceResource: wind_speed
+
+  - name: SetCooling
+    readWrite: W
+    resourceOperations:
+      - deviceResource: cooling_on

@@ -1,0 +1,209 @@
+
+networks:
+  edgex-network:
+    driver: bridge
+
+services:
+  consul:
+    image: hashicorp/consul:1.16
+    container_name: edgex-consul
+    networks: 
+      edgex-network:
+        aliases:
+          - edgex-core-consul
+    ports:
+      - "8500:8500"
+    command: "agent -ui -server -bootstrap -client=0.0.0.0"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: edgex-redis
+    networks: [edgex-network]
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  edgex-core-common-config-bootstrapper:
+    image: edgexfoundry/core-common-config-bootstrapper:3.1.0
+    container_name: edgex-core-common-config-bootstrapper
+    networks: [edgex-network]
+    depends_on: [consul, redis]
+    environment:
+      EDGEX_SECURITY_SECRET_STORE: "false"
+      ALL_SERVICES_DATABASE_HOST: edgex-redis
+      ALL_SERVICES_REGISTRY_HOST: edgex-consul
+      ALL_SERVICES_MESSAGEBUS_HOST: edgex-redis
+      APP_SERVICES_CLIENTS_CORE_METADATA_HOST: edgex-core-metadata
+      APP_SERVICES_CLIENTS_CORE_METADATA_PORT: "59881"
+    restart: unless-stopped
+
+
+  core-metadata:
+    image: edgexfoundry/core-metadata:3.1.0
+    container_name: edgex-core-metadata
+    networks: [edgex-network]
+    depends_on: [consul, redis]
+    environment:
+      EDGEX_SECURITY_SECRET_STORE: "false"
+      REGISTRY_HOST: edgex-consul
+      CLIENTS_CORE_COMMAND_HOST: edgex-core-command
+      CLIENTS_CORE_DATA_HOST: edgex-core-data
+      DATABASES_PRIMARY_HOST: edgex-redis
+      SERVICE_HOST: edgex-core-metadata
+    ports:
+      - "59881:59881"
+    restart: unless-stopped
+
+  core-data:
+    image: edgexfoundry/core-data:3.1.0
+    container_name: edgex-core-data
+    networks: [edgex-network]
+    depends_on: [consul, redis, core-metadata]
+    environment:
+      EDGEX_SECURITY_SECRET_STORE: "false"
+      REGISTRY_HOST: edgex-consul
+      CLIENTS_CORE_METADATA_HOST: edgex-core-metadata
+      DATABASES_PRIMARY_HOST: edgex-redis
+      SERVICE_HOST: edgex-core-data
+      EDGEX_SERVICE_HOST: 0.0.0.0
+      SERVICE_PORT: "59880"
+      EDGEX_SERVICE_SERVERBINDADDR: "0.0.0.0"
+    ports:
+      - "59880:59880"
+    restart: unless-stopped
+
+  core-command:
+    image: edgexfoundry/core-command:3.1.0
+    container_name: edgex-core-command
+    networks: [edgex-network]
+    depends_on: [consul, redis, core-metadata]
+    environment:
+      EDGEX_SECURITY_SECRET_STORE: "false"
+      REGISTRY_HOST: edgex-consul
+      EDGEX_SERVICE_HOST: 0.0.0.0
+      CLIENTS_CORE_METADATA_HOST: edgex-core-metadata
+      SERVICE_HOST: edgex-core-command
+      SERVICE_PORT: "59882"
+      EDGEX_SERVICE_SERVERBINDADDR: "0.0.0.0"
+    ports:
+      - "59882:59882"
+    restart: unless-stopped
+
+
+  device-rest:
+    image: edgexfoundry/device-rest:3.1.0
+    container_name: edgex-device-rest
+    networks: [edgex-network]
+    depends_on: [consul, core-metadata, core-data]
+    environment:
+      EDGEX_SECURITY_SECRET_STORE: "false"
+      SERVICE_HOST: edgex-device-rest
+      SERVICE_PORT: "59986"
+      REGISTRY_HOST: edgex-consul
+      CLIENTS_CORE_METADATA_HOST: edgex-core-metadata
+      CLIENTS_CORE_DATA_HOST: edgex-core-data
+    ports:
+      - "59986:59986"
+    restart: unless-stopped
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    networks: [edgex-network]
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+
+
+  app-mqtt-export:
+    image: edgexfoundry/app-service-configurable:3.1.0
+    container_name: edgex-app-mqtt-export
+    networks: [edgex-network]
+    depends_on: [consul, core-data, mosquitto]
+    environment:
+      EDGEX_PROFILE: mqtt-export
+      EDGEX_SECURITY_SECRET_STORE: "false"
+      CLIENTS_CORE_METADATA_HOST: edgex-core-metadata
+      CLIENTS_CORE_METADATA_PORT: "59881"
+      SERVICE_HOST: edgex-app-mqtt-export
+      WRITABLE_LOGLEVEL: INFO
+      WRITABLE_PIPELINE_FUNCTIONS_MQTTEXPORT_PARAMETERS_TOPIC: edgex-events
+      WRITABLE_PIPELINE_FUNCTIONS_MQTTEXPORT_PARAMETERS_BROKERADDRESS: tcp://mosquitto:1883
+      REGISTRY_HOST: edgex-consul
+      CLIENTS_CORE_METADATA_PROTOCOL: http
+    ports:
+      - "59703:59703"
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    networks: [edgex-network]
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminadminadmin
+      DOCKER_INFLUXDB_INIT_ORG: pro
+      DOCKER_INFLUXDB_INIT_BUCKET: weather
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: pro-token-123
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    networks: [edgex-network]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on: [influxdb]
+    restart: unless-stopped
+
+  visualization-service:
+    build: ./visualization-service
+    container_name: visualization-service
+    networks: [edgex-network]
+    depends_on: [mosquitto, influxdb]
+    environment:
+      MQTT_BROKER: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: edgex-events
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: pro-token-123
+      INFLUX_ORG: pro
+      INFLUX_BUCKET: weather
+      INFLUX_MEASUREMENT: weather_reading
+    restart: unless-stopped
+
+  monitoring-service:
+    build: ./monitoring-service
+    container_name: monitoring-service
+    networks: [edgex-network]
+    depends_on: [mosquitto]
+    environment:
+      MQTT_BROKER: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: edgex-events
+      COMMAND_SERVICE_URL: http://command-service:8090
+      DEFAULT_TEMP_THRESHOLD: "30"
+    ports:
+      - "8091:8091"
+    restart: unless-stopped
+
+  command-service:
+    build: ./command-service
+    container_name: command-service
+    networks: [edgex-network]
+    depends_on: [core-command]
+    environment:
+      EDGEX_CORE_COMMAND_URL: http://edgex-core-command:59882
+      DEVICE_NAME: WeatherDevice
+    ports:
+      - "8090:8090"
+    restart: unless-stopped

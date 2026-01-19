@@ -1,0 +1,23 @@
+[
+  {
+    "apiVersion": "v3",
+    "requestId": "b3b2f7d0-3a8c-4d6a-9c4d-1a6a8f4d2c11",
+    "profile": {
+      "name": "Generic-Device",
+      "manufacturer": "SOA",
+      "model": "WeatherDevice",
+      "labels": ["weather", "demo"],
+      "deviceResources": [
+        {
+          "name": "temperature",
+          "description": "Temperature value",
+          "properties": {
+            "valueType": "Float32",
+            "readWrite": "R",
+            "units": "C"
+          }
+        }
+      ]
+    }
+  }
+]
