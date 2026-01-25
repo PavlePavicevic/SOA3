@@ -185,7 +185,9 @@ services:
     build: ./monitoring-service
     container_name: monitoring-service
     networks: [edgex-network]
-    depends_on: [mosquitto]
+    depends_on: 
+      - mosquitto
+      - command-service
     environment:
       MQTT_BROKER: mosquitto
       MQTT_PORT: "1883"
@@ -200,10 +202,15 @@ services:
     build: ./command-service
     container_name: command-service
     networks: [edgex-network]
-    depends_on: [core-command]
+    depends_on: 
+      - core-command
+      - mosquitto
     environment:
       EDGEX_CORE_COMMAND_URL: http://edgex-core-command:59882
       DEVICE_NAME: WeatherDevice
+      MOSQUITTO_HOST: mosquitto
+      MOSQUITTO_PORT: "1883"
+      COMMAND_TOPIC: edgex/commands
     ports:
       - "8090:8090"
     restart: unless-stopped

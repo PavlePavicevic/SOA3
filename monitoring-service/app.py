@@ -3,7 +3,6 @@ import json
 import time
 import threading
 import requests
-
 import paho.mqtt.client as mqtt
 from flask import Flask, request, jsonify
 
@@ -23,26 +22,26 @@ state = {
 app = Flask(__name__)
 
 def parse_temperature(payload: dict):
-    event = payload.get("event", payload)
-    readings = event.get("readings", [])
+    readings = payload.get("readings", [])
     for r in readings:
         if r.get("resourceName") == "temperature":
             try:
                 return float(r.get("value"))
-            except:
+            except Exception:
                 return None
     return None
 
 def set_cooling(on: bool):
     url = f"{COMMAND_SERVICE_URL}/cooling"
-    r = requests.post(url, json={"on": on}, timeout=10)
+    r = requests.post(url, json={"on": on}, timeout=5)
     r.raise_for_status()
     state["cooling_on"] = on
+    return r.json()
 
 def on_message(_client, _userdata, msg):
     try:
         payload = json.loads(msg.payload.decode("utf-8"))
-    except:
+    except Exception:
         return
 
     temp = parse_temperature(payload)
@@ -52,43 +51,38 @@ def on_message(_client, _userdata, msg):
     state["last_temperature"] = temp
 
     if temp > state["temp_threshold"] and not state["cooling_on"]:
+        print(f"[monitoring] temp {temp} > {state['temp_threshold']} => cooling ON")
         try:
-            print(f"temp {temp} > {state['temp_threshold']} => cooling ON")
             set_cooling(True)
         except Exception as e:
-            print("Failed to set cooling ON:", e)
+            print("[monitoring] failed to set cooling ON:", e)
 
     if temp <= state["temp_threshold"] and state["cooling_on"]:
+        print(f"[monitoring] temp {temp} <= {state['temp_threshold']} => cooling OFF")
         try:
-            print(f"temp {temp} <= {state['temp_threshold']} => cooling OFF")
             set_cooling(False)
         except Exception as e:
-            print("Failed to set cooling OFF:", e)
+            print("[monitoring] failed to set cooling OFF:", e)
 
 @app.put("/rules/temp-threshold")
 def update_threshold():
-    data = request.get_json(force=True)
+    data = request.get_json(force=True) or {}
     thr = float(data["threshold"])
     state["temp_threshold"] = thr
     return jsonify({"ok": True, "temp_threshold": state["temp_threshold"]})
-
-@app.post("/actions/cooling/on")
-def api_cooling_on():
-    set_cooling(True)
-    return jsonify({"ok": True, "cooling_on": state["cooling_on"]})
-
-@app.post("/actions/cooling/off")
-def api_cooling_off():
-    set_cooling(False)
-    return jsonify({"ok": True, "cooling_on": state["cooling_on"]})
 
 @app.get("/status")
 def status():
     return jsonify(state)
 
+@app.get("/health")
+def health():
+    return jsonify({"ok": True})
+
 def mqtt_thread():
     m = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     m.on_message = on_message
+
     while True:
         try:
             m.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
@@ -96,6 +90,7 @@ def mqtt_thread():
         except Exception as e:
             print("MQTT connect failed, retrying:", e)
             time.sleep(2)
+
     m.subscribe(MQTT_TOPIC)
     print(f"[monitoring] subscribed to {MQTT_TOPIC}")
     m.loop_forever()

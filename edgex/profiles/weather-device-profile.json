@@ -16,6 +16,28 @@
             "readWrite": "R",
             "units": "C"
           }
+        },
+        {
+          "name": "cooling_on",
+          "description": "Cooling switch",
+          "properties": {
+          "valueType": "Bool",
+          "readWrite": "RW"
+          }
+        }
+      ],
+      "deviceCommands":[
+        {
+          "name": "SetCooling",
+          "readWrite": "W",
+          "set": true,
+          "path": "/api/v3/device/name/{deviceName}/SetCooling",
+          "resourceOperations": [
+            {
+            "deviceResource": "cooling_on",
+            "defaultValue": "false"
+            }
+          ]
         }
       ]
     }

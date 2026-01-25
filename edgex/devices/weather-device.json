@@ -1,17 +1,21 @@
-{
-  "apiVersion": "v3",
-  "device": {
-    "name": "WeatherDevice",
-    "description": "Weather device fed from Kaggle CSV through Device REST",
-    "adminState": "UNLOCKED",
-    "operatingState": "UP",
-    "labels": ["weather", "kaggle"],
-    "serviceName": "device-rest",
-    "profileName": "Generic-Device",
-    "protocols": {
-      "other": {
-        "Address": "none"
+[
+  {
+    "apiVersion": "v3",
+    "device": {
+      "name": "WeatherDevice",
+      "description": "Weather device fed from Kaggle CSV through Device REST",
+      "adminState": "UNLOCKED",
+      "operatingState": "UP",
+      "labels": ["weather", "kaggle"],
+      "serviceName": "device-rest",
+      "profileName": "Generic-Device",
+      "protocols": {
+        "rest": {
+          "Host": "command-service",
+          "Port": "8090",
+          "RESTPath": "/"
+        }
       }
     }
   }
-}
+]
